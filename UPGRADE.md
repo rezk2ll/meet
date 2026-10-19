@@ -16,6 +16,10 @@ the following command inside your docker container:
 
 ## [Unreleased]
 
+The external API `POST /external-api/v1.0/rooms/{id}/livekit-token` now needs
+the `rooms:livekit_token` scope (it needed `rooms:retrieve`). No migration grants
+it: give it by hand to each application that mints LiveKit tokens.
+
 ## v1.23.0
 
 As part of the 1.23.0 release, the legacy `api/v1` implementation has been removed from the _experimental_ Summary service and Meet has been migrated to the new `api/v2`.
