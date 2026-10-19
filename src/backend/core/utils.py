@@ -19,6 +19,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.core.files.storage import default_storage
+from django.utils.crypto import salted_hmac
 
 import aiohttp
 import boto3
@@ -60,6 +61,14 @@ def generate_color(identity: str) -> str:
     return f"hsl({hue}, {saturation}%, {lightness}%)"
 
 
+def user_id_proof(room: str, identity: str, user_id: str) -> str:
+    """Ties the `user_id` attribute to the room and identity of its token: the
+    attributes can be changed during the call, the room and identity cannot."""
+    return salted_hmac(
+        "core.livekit.user_id", f"{room}:{identity}:{user_id}", algorithm="sha256"
+    ).hexdigest()
+
+
 def generate_token(  # noqa: PLR0917
     room: str,
     user,
@@ -90,7 +99,7 @@ def generate_token(  # noqa: PLR0917
         identity (Optional[str]): Identity imposed by a trusted caller, whoever the
                          user is (a client whose identity is not the `sub` of
                          the user). The token then carries the user in its
-                         `user_id` attribute.
+                         `user_id` attribute, with its `user_id_proof`.
         extra_attributes (Optional[Dict[str, str]]): Attributes added to the token
                          (e.g. the Matrix ids of the participant).
 
@@ -140,6 +149,7 @@ def generate_token(  # noqa: PLR0917
     if imposed_identity and user.is_authenticated:
         # The user behind an imposed identity, for LiveKitTokenAuthentication
         attributes["user_id"] = str(user.pk)
+        attributes["user_id_proof"] = user_id_proof(room, identity, str(user.pk))
 
     token = (
         AccessToken(

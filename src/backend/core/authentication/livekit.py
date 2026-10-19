@@ -4,9 +4,12 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils.crypto import constant_time_compare
 
 from livekit.api import TokenVerifier
 from rest_framework import authentication, exceptions
+
+from core.utils import user_id_proof
 
 UserModel = get_user_model()
 
@@ -54,10 +57,15 @@ class LiveKitTokenAuthentication(authentication.BaseAuthentication):
     def _user_of(claims):
         """The user of the token: by its `user_id` attribute when the identity was
         imposed by the caller (the external API mints `user:device` identities
-        for MatrixRTC, and a provisioned user has no `sub`), else by `sub`."""
+        for MatrixRTC, and a provisioned user has no `sub`), else by `sub`.
+        The attribute counts only with the proof Meet set beside it."""
         attributes = getattr(claims, "attributes", None) or {}
         pk = attributes.get("user_id")
-        if pk:
+        room = claims.video.room if claims.video else ""
+        if pk and constant_time_compare(
+            attributes.get("user_id_proof", ""),
+            user_id_proof(room, claims.identity, pk),
+        ):
             try:
                 return UserModel.objects.get(pk=pk, is_active=True)
             except (UserModel.DoesNotExist, ValueError, DjangoValidationError):

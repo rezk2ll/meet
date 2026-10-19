@@ -10,23 +10,32 @@ from rest_framework.test import APIRequestFactory
 
 from core.authentication.livekit import LiveKitTokenAuthentication
 from core.factories import UserFactory
+from core.utils import user_id_proof
 
 pytestmark = pytest.mark.django_db
 
 
-def livekit_token(identity, attributes=None):
+def livekit_token(identity, attributes=None, room="room"):
     """A LiveKit token of the test configuration."""
     token = (
         AccessToken(
             api_key=settings.LIVEKIT_CONFIGURATION["api_key"],
             api_secret=settings.LIVEKIT_CONFIGURATION["api_secret"],
         )
-        .with_grants(VideoGrants(room="room", room_join=True))
+        .with_grants(VideoGrants(room=room, room_join=True))
         .with_identity(identity)
     )
     if attributes:
         token = token.with_attributes(attributes)
     return token.to_jwt()
+
+
+def user_attributes(user, identity, room="room"):
+    """The attributes Meet sets for a user behind an imposed identity."""
+    return {
+        "user_id": str(user.pk),
+        "user_id_proof": user_id_proof(room, identity, str(user.pk)),
+    }
 
 
 def authenticate(token):
@@ -51,11 +60,48 @@ def test_user_by_the_user_id_attribute_first():
     attribute does, even for a user without a sub."""
     alice = UserFactory(sub=None)
 
+    identity = "@alice:localhost:DEVICE"
+
+    user, _ = authenticate(livekit_token(identity, user_attributes(alice, identity)))
+
+    assert user == alice
+
+
+def test_no_user_by_the_attribute_without_its_proof():
+    """A `user_id` attribute without the proof of Meet names nobody."""
+    alice = UserFactory(sub=None)
+
     user, _ = authenticate(
         livekit_token("@alice:localhost:DEVICE", {"user_id": str(alice.pk)})
     )
 
-    assert user == alice
+    assert user.is_anonymous
+
+
+def test_no_user_by_another_user_id_than_the_proven_one():
+    """The proof holds for one user: another `user_id` beside it names nobody."""
+    alice = UserFactory(sub=None)
+    bob = UserFactory(sub=None)
+    identity = "@alice:localhost:DEVICE"
+    attributes = {**user_attributes(alice, identity), "user_id": str(bob.pk)}
+
+    user, _ = authenticate(livekit_token(identity, attributes))
+
+    assert user.is_anonymous
+
+
+def test_no_user_by_the_attributes_of_another_identity_or_room():
+    """The proof holds for the identity and room it was set for."""
+    alice = UserFactory(sub=None)
+    attributes = user_attributes(alice, "@alice:localhost:DEVICE")
+
+    other_identity, _ = authenticate(livekit_token("@bob:localhost:DEVICE", attributes))
+    other_room, _ = authenticate(
+        livekit_token("@alice:localhost:DEVICE", attributes, room="other")
+    )
+
+    assert other_identity.is_anonymous
+    assert other_room.is_anonymous
 
 
 def test_anonymous_when_nothing_matches():
@@ -70,9 +116,8 @@ def test_anonymous_when_nothing_matches():
 def test_no_user_for_a_disabled_account():
     """A token minted before the account was disabled names nobody."""
     alice = UserFactory(is_active=False)
+    identity = "@alice:localhost:DEVICE"
 
-    user, _ = authenticate(
-        livekit_token("@alice:localhost:DEVICE", {"user_id": str(alice.pk)})
-    )
+    user, _ = authenticate(livekit_token(identity, user_attributes(alice, identity)))
 
     assert user.is_anonymous
