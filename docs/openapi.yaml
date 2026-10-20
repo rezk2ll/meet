@@ -358,6 +358,9 @@ paths:
                 sub:
                   type: string
                   description: OIDC subject of the user, kept when the user has none
+                twake_instance:
+                  type: string
+                  description: Address of the user's Twake Workplace instance, where its recordings and transcripts are saved
       responses:
         '200':
           description: LiveKit configuration

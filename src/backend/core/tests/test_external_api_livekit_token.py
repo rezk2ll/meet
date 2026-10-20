@@ -169,6 +169,52 @@ def test_livekit_token_does_not_tell_that_a_sub_exists():
     assert alice.sub is None
 
 
+def test_livekit_token_keeps_the_twake_instance_the_application_gives():
+    """A user who never signs in to Meet gets its Twake instance from the
+    application, and a later value replaces it."""
+    room = room_of_the_application()
+    alice = UserFactory(twake_instance=None)
+
+    mint(
+        alice,
+        room,
+        {"identity": "@alice:localhost:A", "twake_instance": "alice.twake.test"},
+    )
+    alice.refresh_from_db()
+    assert alice.twake_instance == "alice.twake.test"
+
+    mint(
+        alice,
+        room,
+        {"identity": "@alice:localhost:A", "twake_instance": "alice-2.twake.test"},
+    )
+    alice.refresh_from_db()
+    assert alice.twake_instance == "alice-2.twake.test"
+
+    mint(alice, room, {"identity": "@alice:localhost:A"})
+    alice.refresh_from_db()
+    assert alice.twake_instance == "alice-2.twake.test"
+
+
+def test_livekit_token_refuses_a_twake_instance_that_is_no_hostname():
+    """A value that is not a bare hostname is dropped, and the call goes on."""
+    room = room_of_the_application()
+    alice = UserFactory(twake_instance="alice.twake.test")
+
+    response = mint(
+        alice,
+        room,
+        {
+            "identity": "@alice:localhost:A",
+            "twake_instance": "attacker.test/../victim.twake.test",
+        },
+    )
+
+    assert response.status_code == 200
+    alice.refresh_from_db()
+    assert alice.twake_instance == "alice.twake.test"
+
+
 def test_livekit_token_requires_its_own_scope():
     """rooms:retrieve reads a room: it mints no token."""
     room = room_of_the_application()

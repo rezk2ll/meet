@@ -244,6 +244,21 @@ class RoomViewSet(
                     client_id,
                 )
 
+        twake_instance = data.get("twake_instance")
+        if twake_instance and twake_instance != user.twake_instance:
+            previous = user.twake_instance
+            user.twake_instance = twake_instance
+            try:
+                user.save(update_fields=["twake_instance"])
+            except ValidationError:
+                # The call goes on: only the deliveries depend on it
+                user.twake_instance = previous
+                logger.warning(
+                    "Twake instance refused via application: user_id=%s, client_id=%s",
+                    user.id,
+                    client_id,
+                )
+
         identity = data["identity"]
         matrix_user_id, _, matrix_device_id = identity.rpartition(":")
         role = data.get("role")

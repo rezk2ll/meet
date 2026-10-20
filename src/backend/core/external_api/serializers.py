@@ -29,8 +29,8 @@ class LivekitTokenSerializer(BaseValidationOnlySerializer):
     device (`@user:server:device`), so Meet must mint exactly that one. That
     shape is never the `sub` of a user (a `sub` holds no colon): the token
     cannot enter the room as somebody else's Meet identity. `sub`
-    fills the OIDC subject of a user provisioned by email, which the deliveries
-    need.
+    fills the OIDC subject of a user provisioned by email. `twake_instance` is
+    where the deliveries go for a user who never signs in to Meet.
     """
 
     identity = serializers.RegexField(
@@ -41,6 +41,9 @@ class LivekitTokenSerializer(BaseValidationOnlySerializer):
         choices=models.RoleChoices.choices, required=False, allow_null=True
     )
     sub = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    twake_instance = serializers.CharField(
+        max_length=255, required=False, allow_blank=True
+    )
 
 
 class RoomSerializer(serializers.ModelSerializer):
